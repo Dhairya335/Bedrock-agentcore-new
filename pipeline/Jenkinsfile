@@ -87,5 +87,17 @@ pipeline {
         '''
       }
     }
+
+    stage('Deploy to AgentCore') {
+      steps {
+        sh '''
+          aws bedrock-agentcore-control update-agent-runtime \
+            --agent-runtime-id ${RUNTIME_ID} \
+            --agent-runtime-artifact containerConfiguration={containerUri=${IMAGE_URI}} \
+            --region ${AWS_REGION} \
+            --profile ${AWS_PROFILE}
+        '''
+      }
+    }
   }
 }
