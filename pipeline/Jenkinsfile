@@ -19,6 +19,7 @@ pipeline {
     ECR_REPO    = "test/astrolimeagent"
     IMAGE_TAG   = "1.${BUILD_NUMBER}"
     IMAGE_URI   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+    RUNTIME_ID  = "astroLime_Agent-RSlT6A3waq"
   }
 
   stages {
