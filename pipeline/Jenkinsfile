@@ -1,0 +1,91 @@
+pipeline {
+  agent any
+
+  options {
+    buildDiscarder(
+      logRotator(
+        numToKeepStr: '3',
+        daysToKeepStr: '5'
+      )
+    )
+  }
+
+  environment {
+    REPO_NAME   = "Bedrock-agentcore"
+    AWS_REGION  = "us-east-1"
+    AWS_PROFILE = "jenkins"
+    ACCOUNT_ID  = "897675553288"
+
+    ECR_REPO    = "test/astrolimeagent"
+    IMAGE_TAG   = "1.${BUILD_NUMBER}"
+    IMAGE_URI   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        dir("${WORKSPACE}/${REPO_NAME}") {
+          git branch: 'main',
+              credentialsId: "Dhairya335-bedrock-agentcore",
+              url: "https://github.com/Dhairya335/${REPO_NAME}"
+        }
+      }
+    }
+
+    stage('Validate AWS Identity') {
+      steps {
+        dir("${WORKSPACE}/${REPO_NAME}") {
+          sh '''
+            aws sts get-caller-identity --profile ${AWS_PROFILE}
+          '''
+        }
+      }
+    }
+
+    stage('Verify ECR Repository Exists') {
+      steps {
+        dir("${WORKSPACE}/${REPO_NAME}") {
+          sh '''
+            aws ecr describe-repositories \
+              --repository-names ${ECR_REPO} \
+              --region ${AWS_REGION} \
+              --profile ${AWS_PROFILE}
+          '''
+        }
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        dir("${WORKSPACE}/${REPO_NAME}") {
+          sh '''
+            podman build -t astrolimeagent:${IMAGE_TAG} .
+          '''
+        }
+      }
+    }
+
+    stage('Login to ECR') {
+      steps {
+        sh '''
+          aws ecr get-login-password \
+            --region ${AWS_REGION} \
+            --profile ${AWS_PROFILE} \
+          | podman login \
+            --username AWS \
+            --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+        '''
+      }
+    }
+
+    stage('Tag Image and push to ECR') {
+      steps {
+        sh '''
+          podman tag astrolimeagent:${IMAGE_TAG} ${IMAGE_URI}
+          podman push ${IMAGE_URI}
+        '''
+      }
+    }
+  }
+}
