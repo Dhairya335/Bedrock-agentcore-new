@@ -11,7 +11,7 @@ pipeline {
   }
 
   environment {
-    REPO_NAME   = "Bedrock-agentcore"
+    REPO_NAME   = "Bedrock-agentcore-new"
     AWS_REGION  = "us-east-1"
     AWS_PROFILE = "jenkins"
     ACCOUNT_ID  = "897675553288"
