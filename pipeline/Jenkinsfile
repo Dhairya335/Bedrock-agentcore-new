@@ -65,7 +65,7 @@ pipeline {
       steps {
         dir("${WORKSPACE}/${REPO_NAME}") {
           sh '''
-            podman build -t astrolimeagent:${IMAGE_TAG} .
+            podman build --platform linux/arm64 -t astrolimeagent:${IMAGE_TAG} .
           '''
         }
       }
