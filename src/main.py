@@ -62,35 +62,13 @@ async def invoke(payload, context):
             tools=[code_interpreter.code_interpreter, add_numbers] + tools
         )
 
-        stream = agent.stream_async(payload.get("prompt"))
-
-        ## NEW LOGIC: Advanced streaming filter
-        full_response_buffer = ""
-        is_thinking = False
-
-        async for event in stream:
+        full_response = ""
+        async for event in agent.stream_async(payload.get("prompt")):
             if "data" in event and isinstance(event["data"], str):
-                chunk = event["data"]
-                full_response_buffer += chunk
-
-                # Check for start of thinking
-                if "<thinking" in full_response_buffer and not is_thinking:
-                    is_thinking = True
-                
-                # Check for end of thinking
-                if "</thinking>" in full_response_buffer:
-                    # Remove the thinking block from the buffer entirely
-                    # Everything after </thinking> is what we want to keep
-                    parts = full_response_buffer.split("</thinking>")
-                    if len(parts) > 1:
-                        full_response_buffer = parts[-1].lstrip() # Keep only the text after the tag
-                    is_thinking = False
-                
-                # If we aren't thinking and we have content that isn't part of an opening tag
-                if not is_thinking and not full_response_buffer.startswith("<"):
-                    if full_response_buffer:
-                        yield full_response_buffer
-                        full_response_buffer = "" # Clear buffer after yielding
+                full_response += event["data"]
+        
+        if full_response.strip():
+            yield full_response
 
 def format_response(result) -> str:
     parts = []
