@@ -15,4 +15,4 @@ COPY src /app/src
 
 EXPOSE 8080
 
-CMD ["python", "-m", "src.main"]
+CMD ["uv", "run", "python", "-m", "src.main"]
