@@ -42,7 +42,6 @@ pipeline {
       steps {
         dir("${WORKSPACE}/${REPO_NAME}") {
           sh '''
-            aws sso login --profile jenkins 
             aws sts get-caller-identity --profile ${AWS_PROFILE}
           '''
         }
