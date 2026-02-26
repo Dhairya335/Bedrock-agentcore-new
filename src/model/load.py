@@ -2,7 +2,7 @@ from strands.models import BedrockModel
 
 # Uses global inference profile for Claude Sonnet 4.5
 # https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles-support.html
-MODEL_ID = "amazon.nova-micro-v1:0"
+MODEL_ID = "us.amazon.nova-micro-v1:0"
 
 def load_model() -> BedrockModel:
     """
