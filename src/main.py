@@ -1,5 +1,4 @@
 import os
-import re  ## ADDED: For stripping <thinking> tags
 from strands import Agent, tool
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig, RetrievalConfig
@@ -14,7 +13,6 @@ log = app.logger
 MEMORY_ID = os.getenv("BEDROCK_AGENTCORE_MEMORY_ID")
 REGION = os.getenv("AWS_REGION")
 
-# Import AgentCore Gateway as Streamable HTTP MCP Client
 mcp_client = get_streamable_http_mcp_client()
 
 @tool
@@ -27,7 +25,6 @@ async def invoke(payload, context):
     session_id = getattr(context, 'session_id', 'default')
     user_id = payload.get("user_id") or 'default-user'
     
-    # Configure memory
     session_manager = None
     if MEMORY_ID:
         session_manager = AgentCoreMemorySessionManager(
@@ -45,7 +42,6 @@ async def invoke(payload, context):
             REGION
         )
 
-    # Create code interpreter
     code_interpreter = AgentCoreCodeInterpreter(
         region=REGION,
         session_name=session_id,
@@ -60,38 +56,43 @@ async def invoke(payload, context):
             model=load_model(),
             session_manager=session_manager,
             system_prompt="""
-                You are a helpful assistant with code execution capabilities. 
-                Respond directly to the user. Do not include your internal thought process.
+                You are a helpful assistant. Use tools when appropriate. 
+                IMPORTANT: Do not show your thinking process to the user.
             """,
             tools=[code_interpreter.code_interpreter, add_numbers] + tools
         )
 
-        # Execute and format response
         stream = agent.stream_async(payload.get("prompt"))
 
-        ## CHANGED: State management to filter out thinking blocks
+        ## NEW LOGIC: Advanced streaming filter
+        full_response_buffer = ""
         is_thinking = False
 
         async for event in stream:
-            # Check for text data in the event
             if "data" in event and isinstance(event["data"], str):
                 chunk = event["data"]
+                full_response_buffer += chunk
 
-                ## ADDED: Logic to suppress everything between <thinking> and </thinking>
-                if "<thinking" in chunk:
+                # Check for start of thinking
+                if "<thinking" in full_response_buffer and not is_thinking:
                     is_thinking = True
-                    continue
-                if "</thinking>" in chunk:
-                    is_thinking = False
-                    continue
                 
-                # Only yield if we are not inside a thinking block
-                if not is_thinking:
-                    # Clean up any residual whitespace or formatting if necessary
-                    yield chunk
+                # Check for end of thinking
+                if "</thinking>" in full_response_buffer:
+                    # Remove the thinking block from the buffer entirely
+                    # Everything after </thinking> is what we want to keep
+                    parts = full_response_buffer.split("</thinking>")
+                    if len(parts) > 1:
+                        full_response_buffer = parts[-1].lstrip() # Keep only the text after the tag
+                    is_thinking = False
+                
+                # If we aren't thinking and we have content that isn't part of an opening tag
+                if not is_thinking and not full_response_buffer.startswith("<"):
+                    if full_response_buffer:
+                        yield full_response_buffer
+                        full_response_buffer = "" # Clear buffer after yielding
 
 def format_response(result) -> str:
-    """Extract code from metrics and format with LLM response."""
     parts = []
     try:
         tool_metrics = result.metrics.tool_metrics.get('code_interpreter')
