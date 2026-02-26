@@ -38,7 +38,7 @@ pipeline {
       }
     }
 
-##    stage('Validate AWS Identity') {
+#    stage('Validate AWS Identity') {
 #      steps {
 #        dir("${WORKSPACE}/${REPO_NAME}") {
 #          sh '''
