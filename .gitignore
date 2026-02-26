@@ -23,7 +23,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-token.txt
+
 # Virtual environments
 venv/
 ENV/
