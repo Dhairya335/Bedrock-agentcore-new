@@ -96,31 +96,29 @@ pipeline {
     stage('Deploy to AgentCore') {
       steps {
         sh '''
-          # 1. Check if the runtime exists
-          EXISTS=$(aws bedrock-agentcore-control list-agent-runtimes --profile ${AWS_PROFILE} --region ${AWS_REGION} --query "agentRuntimes[?agentRuntimeId=='${RUNTIME_ID}'].agentRuntimeId" --output text)
-
-          if [ "$EXISTS" == "${RUNTIME_ID}" ]; then
-            echo "Runtime exists. Deleting to apply new configuration..."
-            aws bedrock-agentcore-control delete-agent-runtime \
-              --agent-runtime-id ${RUNTIME_ID} \
-              --region ${AWS_REGION} \
-              --profile ${AWS_PROFILE}
-            
-            # Give AWS a few seconds to clean up the resource
-            sleep 10
-          fi
-
-          echo "Creating new AgentCore Runtime: ${RUNTIME_ID} with image: ${IMAGE_URI}"
-          
-          # 2. Create the runtime (matches your exact setup from the 'get' output)
-          aws bedrock-agentcore-control create-agent-runtime \
+          # 1. Clean up the old runtime
+          echo "Deleting existing runtime: ${RUNTIME_ID}..."
+          aws bedrock-agentcore-control delete-agent-runtime \
             --agent-runtime-id ${RUNTIME_ID} \
+            --region ${AWS_REGION} \
+            --profile ${AWS_PROFILE} || echo "Runtime not found, skipping delete."
+
+          # Wait for deletion to propagate
+          sleep 15
+
+          # 2. Create the new runtime (Notice: No --agent-runtime-id here)
+          echo "Creating new AgentCore Runtime..."
+          NEW_RUNTIME_DATA=$(aws bedrock-agentcore-control create-agent-runtime \
             --agent-runtime-name "astroLime_Agent" \
             --agent-runtime-artifact "containerConfiguration={containerUri=${IMAGE_URI}}" \
             --role-arn ${RUNTIME_ROLE_ARN} \
             --network-configuration "networkMode=${NETWORK_MODE}" \
             --region ${AWS_REGION} \
-            --profile ${AWS_PROFILE}
+            --profile ${AWS_PROFILE})
+
+          # 3. Capture the NEW ID (Optional: update your environment/logs)
+          NEW_ID=$(echo $NEW_RUNTIME_DATA | jq -r '.agentRuntimeId')
+          echo "Successfully created new runtime with ID: $NEW_ID"
         '''
       }
     }
