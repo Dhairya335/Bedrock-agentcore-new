@@ -1,4 +1,5 @@
 import os
+import re  ## ADDED: For stripping <thinking> tags
 from strands import Agent, tool
 from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig, RetrievalConfig
@@ -16,7 +17,6 @@ REGION = os.getenv("AWS_REGION")
 # Import AgentCore Gateway as Streamable HTTP MCP Client
 mcp_client = get_streamable_http_mcp_client()
 
-# Define a simple function tool
 @tool
 def add_numbers(a: int, b: int) -> int:
     """Return the sum of two numbers"""
@@ -44,10 +44,7 @@ async def invoke(payload, context):
             ),
             REGION
         )
-    else:
-        log.warning("MEMORY_ID is not set. Skipping memory session manager initialization.")
 
-    
     # Create code interpreter
     code_interpreter = AgentCoreCodeInterpreter(
         region=REGION,
@@ -57,15 +54,14 @@ async def invoke(payload, context):
     )
 
     with mcp_client as client:
-        # Get MCP Tools
         tools = client.list_tools_sync()
 
-        # Create agent
         agent = Agent(
             model=load_model(),
-             session_manager=session_manager,
+            session_manager=session_manager,
             system_prompt="""
-                You are a helpful assistant with code execution capabilities. Use tools when appropriate.
+                You are a helpful assistant with code execution capabilities. 
+                Respond directly to the user. Do not include your internal thought process.
             """,
             tools=[code_interpreter.code_interpreter, add_numbers] + tools
         )
@@ -73,24 +69,30 @@ async def invoke(payload, context):
         # Execute and format response
         stream = agent.stream_async(payload.get("prompt"))
 
+        ## CHANGED: State management to filter out thinking blocks
+        is_thinking = False
+
         async for event in stream:
-            # Handle Text parts of the response
+            # Check for text data in the event
             if "data" in event and isinstance(event["data"], str):
-                yield event["data"]
+                chunk = event["data"]
 
-            # Implement additional handling for other events
-            # if "toolUse" in event:
-            #   # Process toolUse
-
-            # Handle end of stream
-            # if "result" in event:
-            #    yield(format_response(event["result"]))
+                ## ADDED: Logic to suppress everything between <thinking> and </thinking>
+                if "<thinking" in chunk:
+                    is_thinking = True
+                    continue
+                if "</thinking>" in chunk:
+                    is_thinking = False
+                    continue
+                
+                # Only yield if we are not inside a thinking block
+                if not is_thinking:
+                    # Clean up any residual whitespace or formatting if necessary
+                    yield chunk
 
 def format_response(result) -> str:
     """Extract code from metrics and format with LLM response."""
     parts = []
-
-    # Extract executed code from metrics
     try:
         tool_metrics = result.metrics.tool_metrics.get('code_interpreter')
         if tool_metrics and hasattr(tool_metrics, 'tool'):
@@ -98,9 +100,8 @@ def format_response(result) -> str:
             if 'code' in action:
                 parts.append(f"## Executed Code:\n```{action.get('language', 'python')}\n{action['code']}\n```\n---\n")
     except (AttributeError, KeyError):
-        pass  # No code to extract
+        pass
 
-    # Add LLM response
     parts.append(f"## 📊 Result:\n{str(result)}")
     return "\n".join(parts)
 
