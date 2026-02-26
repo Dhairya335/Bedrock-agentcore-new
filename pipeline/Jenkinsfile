@@ -38,15 +38,15 @@ pipeline {
       }
     }
 
-    stage('Validate AWS Identity') {
-      steps {
-        dir("${WORKSPACE}/${REPO_NAME}") {
-          sh '''
-            aws sts get-caller-identity --profile ${AWS_PROFILE}
-          '''
-        }
-      }
-    }
+##    stage('Validate AWS Identity') {
+#      steps {
+#        dir("${WORKSPACE}/${REPO_NAME}") {
+#          sh '''
+#            aws sts get-caller-identity --profile ${AWS_PROFILE}
+#          '''
+#        }
+#      }
+#    }
 
     stage('Verify ECR Repository Exists') {
       steps {
