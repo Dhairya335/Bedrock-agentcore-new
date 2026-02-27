@@ -1,0 +1,40 @@
+version: 0.2
+
+env:
+  variables:
+    REPO_NAME: "Bedrock-agentcore-new"
+    AWS_REGION: "us-east-1"
+    ACCOUNT_ID: "897675553288"
+    ECR_REPO: "test/astrolimeagent"
+    RUNTIME_ID: "astroLime_Agent-77dn5fEaCd"
+    RUNTIME_ROLE_ARN: "arn:aws:iam::897675553288:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-7171c955a3"
+    NETWORK_MODE: "PUBLIC"
+    BEDROCK_AGENTCORE_MEMORY_ID: "astroLime_Agent_mem-ltrrOWE6tU"
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      # CODEBUILD_BUILD_NUMBER is a built-in variable that replaces your Jenkins ${BUILD_NUMBER}
+      - IMAGE_TAG="1.${CODEBUILD_BUILD_NUMBER}"
+      - IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+  build:
+    commands:
+      - echo "Building ARM64 Docker image..."
+      # Since we set the environment to ARM, this automatically builds the correct architecture
+      - docker build -t astrolimeagent:${IMAGE_TAG} .
+  post_build:
+    commands:
+      - echo "Tagging and Pushing to ECR..."
+      - docker tag astrolimeagent:${IMAGE_TAG} ${IMAGE_URI}
+      - docker push ${IMAGE_URI}
+      - echo "Deploying to Bedrock AgentCore..."
+      - |
+        aws bedrock-agentcore-control update-agent-runtime \
+          --agent-runtime-id "${RUNTIME_ID}" \
+          --agent-runtime-artifact "containerConfiguration={containerUri=${IMAGE_URI}}" \
+          --environment-variables "BEDROCK_AGENTCORE_MEMORY_ID=${BEDROCK_AGENTCORE_MEMORY_ID},AWS_REGION=${AWS_REGION}" \
+          --role-arn "${RUNTIME_ROLE_ARN}" \
+          --network-configuration "networkMode=${NETWORK_MODE}" \
+          --region "${AWS_REGION}"
